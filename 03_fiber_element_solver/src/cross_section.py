@@ -140,6 +140,6 @@ class Cross_Section:
         
         self.unbalanced_forces = self.forces - resisting_forces
         self.residuals = self.section_flex_matrix @ self.unbalanced_forces
-        print("                  section unbalanced forces norm:", np.linalg.norm(self.unbalanced_forces))
+        #print("                  section unbalanced forces norm:", np.linalg.norm(self.unbalanced_forces))
         self.tolerance = 1e-6
         return abs(np.linalg.norm(self.unbalanced_forces)) < self.tolerance

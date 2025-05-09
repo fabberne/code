@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tabulate import tabulate
 
-import element
 import geometry
 
 class Mesh:

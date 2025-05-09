@@ -156,13 +156,13 @@ class Beam_Element:
         displacements_increment_local = T @ displacements_increment
         change_in_displacements_increment = L.T @ displacements_increment_local
 
-        self.max_section_iterations = 100
+        self.max_section_iterations = 50
         for j in range(self.max_section_iterations):
             print("            Element iteration ", j)
             if j == 0:
-                change_in_force_increment = self.K_local @ change_in_displacements_increment
+                change_in_force_increment = - self.K_local @ change_in_displacements_increment
             else:
-                change_in_force_increment = self.K_local @ self.displacements_residual
+                change_in_force_increment = - self.K_local @ self.displacements_residual
 
             self.force_increment += change_in_force_increment
             self.resisting_forces = self.resisting_forces_converged + self.force_increment
@@ -170,13 +170,14 @@ class Beam_Element:
             does_element_converge = True
             for cross_section in self.cross_sections:
                 if cross_section.state_determination(change_in_force_increment):
-                    print("                  Cross section converged")
+                    #print("                  Cross section converged")
+                    pass
                 else:
-                    print("                  Cross section did not converge")
+                    #print("                  Cross section did not converge")
                     does_element_converge = False
 
             self.K_local  = self.get_local_stiffness_matrix()
-            print("Det K: ", np.linalg.det(self.K_local))
+            #print("                  Det K: ", np.linalg.det(self.K_local))
 
             if does_element_converge:
                 return
@@ -185,7 +186,7 @@ class Beam_Element:
                 self.displacements_residual.fill(0.0)
                 for cross_section in self.cross_sections:
                     self.displacements_residual += J * cross_section.gauss_weight * cross_section.get_global_residuals()
-                print("         Element did not converge")
+                #print("         Element did not converge")
         
     def get_global_resisting_forces(self):
         # Compute the global force vector using the local force vector and transformation matrix
