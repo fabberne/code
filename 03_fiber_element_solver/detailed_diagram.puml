@@ -1,0 +1,243 @@
+
+@startuml
+left to right direction
+skinparam linetype ortho
+
+
+together {
+
+package material {
+    class Material {
+      + __init__()
+    }
+    
+    class Concrete_C30_37 {
+      + __init__()
+      + get_stress_vectorized()
+      + get_tangent_vectorized()
+    }
+    Concrete_C30_37 -|> Material
+    
+    class Steel_S235 {
+      + __init__()
+      + get_stress_vectorized()
+      + get_tangent_vectorized()
+    }
+    Steel_S235 -|> Material
+    
+    class Rebar_B500B {
+      + __init__()
+      + get_stress_vectorized()
+      + get_tangent_vectorized()
+    }
+    Rebar_B500B -|> Material
+    
+}
+
+package solver {
+    class Solver {
+      + plot_initial_structure()
+      + plot_displaced_structure()
+      + print_nodal_displacements_and_forces()
+    }
+    
+    class Linear {
+      - structure : Structure
+      - displacements 
+      - forces 
+      + __init__()
+      + solve()
+    }
+    Linear -|> Solver
+    
+    class Nonlinear {
+      - structure : Structure
+      - constraint : Constraint
+      - attempts
+      - controlled_DOF
+      - NR_tolerance
+      - NR_max_iter
+      - section_tolerance 
+      - section_max_iter
+      + __init__()
+      + setConstraint()
+      + solve()
+      + getSolution()
+    }
+    Nonlinear -|> Solver
+    
+    class Constraint {
+      + __init__()
+    }
+    Nonlinear --> Constraint
+    
+    class Load {
+      - name 
+      + get()
+      + predict()
+    }
+    Load -|> Constraint
+    
+    class Displacement {
+      - name 
+      + get()
+      + predict()
+    }
+    Displacement -|> Constraint
+    
+    class Arc {
+      - name 
+      + get()
+      + predict()
+    }
+    Arc -|> Constraint
+}
+' Create a dummy anchor to align above structure
+class Dummy
+hide Dummy
+Dummy -[hidden]-> structure
+}
+
+
+
+
+
+package structure {
+    class Structure {
+      - beam_elements : Beam_Element[]
+      - displacements 
+      - displacements_converged
+      - displacements_increment
+      - lambda_factor
+      - lambda_factor_converged
+      - lambda_factor_increment
+      - K_global
+      - F_global 
+      - Residual 
+      - fixed_DOFs
+      - load_DOFs
+      - nodal_loads
+      + __init__()
+      + assemble()
+      + assemble_without_bc()
+      + apply_boundary_conditions()
+      + apply_nodal_loads()
+      + reset_stiffness_and_residual()
+      + getSystemMatrices()
+      + getState()
+      + set_displaced_nodes()
+      + set_section_max_iter_and_tolerance()
+    }
+    Structure --> Beam_Element
+    
+    class Fiber {
+      - coords
+      - A 
+      - Cy 
+      - Cz 
+      - Iy 
+      - Iz 
+      - material : Material
+      + __init__()
+      + get_sorted_coordinates()
+      + area()
+      + centroid()
+      + local_inertia()
+    }
+    
+    class Cross_Section {
+      - geometry : Geometry
+      - fibers : Fiber[]
+      - gauss_point
+      - gauss_weight
+      - fibers_y_coord
+      - fibers_z_coord
+      - fibers_A
+      - fibers_tangent_modulus
+      - strains 
+      - strains_converged
+      - strains_increment
+      - stresses 
+      - section_flex_matrix
+      - section_b_matrix
+      - forces
+      - forces_converged
+      - forces_increments
+      - unbalanced_forces
+      - residuals
+      + __init__()
+      + get_flexibility_matrix()
+      + get_global_flexibility_matrix()
+      + get_global_residuals()
+      + state_determination()
+    }
+    Cross_Section --> Fiber
+    
+    class Beam_Element {
+      - cross_sections : Cross_Section[]
+      - number_of_cross_sections
+      - nodes_initial
+      - nodes_displaced
+      - gauss_points
+      - gauss_weights
+      - length 
+      - K_local
+      - K_global
+      - force_increment 
+      - resisting_forces 
+      - resisting_forces_converged
+      - displacement_residual
+      - beam_DOFs
+      + __init__()
+      + get_gauss()
+      + get_local_stiffness_matrix()
+      + get_global_stiffness_matrix()
+      + get_global_resisting_forces()
+      + get_transformation_matrix()
+      + get_rotation_matrix()
+      + state_determination()
+    }
+    Beam_Element --> Cross_Section
+    
+    class Frame {
+      + __init__()
+    }
+    Frame -|> Structure
+    
+    class Cantilever {
+      + __init__()
+    }
+    Cantilever -|> Structure
+    
+    
+    class Mesh {
+      - mesh_type
+      - mesh_size
+      - node_coords
+      - geometry : Geometry
+      - elements : Fiber[]
+      + __init__()
+      + get_A_numerical()
+      + get_centroid()
+      + get_I_numerical()
+      + print()
+      + plot()
+    
+    }
+    Cross_Section --> Mesh
+    
+    class Geometry {
+      + __init__()
+      + generate_mesh()
+    }
+    Geometry --> Mesh
+}
+
+
+solver.Solver -down> structure.Structure
+
+structure.Fiber -right> material.Material
+
+
+
+@enduml

@@ -66,12 +66,3 @@ class Fiber:
         Iz  = Iz - self.A * self.Cz ** 2
 
         return Iy, Iz
-
-    def state_determination(self, change_in_deformation_increment):
-        
-        change_in_strain_increment = np.array([-self.Cy, self.Cz, 1]) @ change_in_deformation_increment
-        self.strain_increment += change_in_strain_increment
-        self.strain = self.strain_converged + self.strain_increment
-        self.stress = self.material.get_stress(self.strain)
-
-    

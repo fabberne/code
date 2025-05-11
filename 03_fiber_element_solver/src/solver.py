@@ -119,15 +119,14 @@ class Linear(Solver):
         self.displacements = np.zeros(self.structure.number_of_DOFs)
         self.forces        = np.zeros(self.structure.number_of_DOFs)
 
-    def solve(self, load_DOFs, nodal_loads):
-        self.structure.assemble_stiffness_and_forces()
-        self.structure.apply_boundary_conditions()
-
-        self.structure.apply_nodal_loads(load_DOFs, nodal_loads)
+    def solve(self):
+        
+        self.structure.assemble()
+        self.structure.apply_nodal_loads()
 
         self.displacements = np.linalg.solve(self.structure.K_global, self.structure.F_global)
 
-        self.structure.assemble_stiffness_and_forces()
+        self.structure.assemble_without_bc()
         self.forces = np.dot(self.structure.K_global, self.displacements)
 
         self.print_nodal_displacements_and_forces()
@@ -138,7 +137,7 @@ class Linear(Solver):
 
 
 class Nonlinear(Solver):
-    def __init__(self, structure, constraint="Load", NR_tolerance=1e-6, NR_max_iter=1000, section_tolerance=1e-6, section_max_iter=1000):
+    def __init__(self, structure, constraint="Load", NR_tolerance=1e-6, NR_max_iter=100, section_tolerance=1e-6, section_max_iter=100, controlled_DOF=None):
         self.structure = structure
 
         self.attempts = 5
@@ -146,13 +145,13 @@ class Nonlinear(Solver):
         self.NR_tolerance = NR_tolerance
         self.NR_max_iter  = NR_max_iter
 
-        self.section_tolerance = section_tolerance
-        self.section_max_iter  = section_max_iter
+        self.structure.set_section_max_iter_and_tolerance(section_max_iter, section_tolerance)
 
         self.iteration = 0
         self.iteration_section = 0
 
         self.setConstraint(constraint)
+        self.controlled_DOF = controlled_DOF
 
     def setConstraint(self, constraint):
 
@@ -192,9 +191,8 @@ class Nonlinear(Solver):
             while (not convergence_boolean) and (attempt <= self.attempts):
                 print("   Attempt ", attempt)
                 u, llambda, convergence_boolean = self.getSolution(
-                    u0, lambda0, increments[step]
+                    u0, lambda0, increments[step], self.controlled_DOF
                 )
-
                 attempt += 1
 
                 if (not convergence_boolean) and (attempt <= self.attempts):
@@ -210,9 +208,8 @@ class Nonlinear(Solver):
         return u_history, lambda_history
 
 
-    def getSolution(self, u0, lambda0, increment):
+    def getSolution(self, u0, lambda0, increment, controlled_DOF=None):
 
-        #self.structure.lambda_factor = lambda0
         self.structure.assemble()
         Stiffness_K, fext, ResidualsR = self.structure.K_global, self.structure.F_global, self.structure.Residual
         convergence_norm = max(np.linalg.norm(fext),1)
@@ -241,7 +238,7 @@ class Nonlinear(Solver):
             #___ Step 2: Calculate the deformation increments ___
             print("      NR Iteration ", iteration)
             g, h, s = self.constraint.get(
-                u, llambda, u0, lambda0, deltaUp, deltalambdap, increment
+                u, llambda, u0, lambda0, deltaUp, deltalambdap, increment, controlled_DOF=controlled_DOF
             )
 
             du_tilde        =   np.linalg.inv(Stiffness_K).dot(fext)
@@ -250,14 +247,14 @@ class Nonlinear(Solver):
             deltalambdap = - (g + np.transpose(h).dot(du_double_tilde)) / (s +np.transpose(h).dot(du_tilde))
             deltaUp      = deltalambdap * du_tilde + du_double_tilde
             
-            # Update the solution variables
-            #u, llambda = u + deltaUp, llambda + deltalambdap
-
             #___ Steps 3 - 14 ___
             Stiffness_K, fext, ResidualsR = self.structure.getSystemMatrices(deltaUp, deltalambdap)
         
+            # Update the solution variables
             u       = self.structure.displacements
             llambda = self.structure.lambda_factor
+
+            print("fext:", np.linalg.norm(self.structure.F_global))
             
 
             #___ Step 15: Check convergence criteria ___
@@ -266,8 +263,6 @@ class Nonlinear(Solver):
             if np.linalg.norm(ResidualsR) <= self.NR_tolerance * convergence_norm:
                 print("NR Converged!")
                 convergence_boolean = True
-                #u       = self.structure.displacements
-                #llambda = self.structure.lambda_factor
 
                 # finalize the load step
                 self.structure.displacements_increment.fill(0.0)
@@ -288,7 +283,11 @@ class Nonlinear(Solver):
                 break
             else:
                 convergence_boolean = False
-        return u, llambda, convergence_boolean
+                
+        if self.constraint.name == "Displacement control":
+            return -u, -llambda, convergence_boolean
+        else:
+            return  u,  llambda, convergence_boolean
 
 
 class Constraint:
@@ -303,7 +302,6 @@ class Constraint:
                     'Arc'          : Arc-length method
                     'Displacement' : Displacement control
                     'Load'         : Load control
-                    'Riks'         : Riks method
 
     Attributes
     ----------
@@ -326,8 +324,7 @@ class Constraint:
     __constraints = {
         "Displacement": "_Displacement",
         "Load": "_Load",
-        "Arc": "_Arc",
-        "Riks": "_Riks",
+        "Arc": "_Arc"
     }
 
     def __init__(self, constraint):
@@ -342,7 +339,7 @@ class Constraint:
         self._constraint = constraint()
 
     def get(
-        self, u, llambda, u0, llambda0, deltaUp, deltalambdap, deltaS, T=None, *args
+        self, u, llambda, u0, llambda0, deltaUp, deltalambdap, deltaS, T=None, controlled_DOF=None, *args
     ):
         """
         Get the values of the constraint function and the gradients with
@@ -380,7 +377,7 @@ class Constraint:
         """
 
         g, h, s = self._constraint.get(
-            u, llambda, u0, llambda0, deltaUp, deltalambdap, deltaS, T=None, *args
+            u, llambda, u0, llambda0, deltaUp, deltalambdap, deltaS, controlled_DOF=controlled_DOF, T=None, *args
         )
 
         return g, h, s
@@ -463,90 +460,65 @@ class _Load(_Constraint):
 
     name = "Load control"
 
-    def get(self, u, llambda, u0, llambda0, deltaUp, deltalambdap, deltaS, T=None):
+    def get(self, u, llambda, u_0, llambda_0, delta_u_p, delta_lambda_p, delta_s, T=None, controlled_DOF=None):
 
-        g = llambda - llambda0 - deltaS
+        g = llambda - llambda_0 - delta_s
         h = np.zeros_like(u)
         s = 1
 
         return g, h, s
 
-    def predict(self, func, u, llambda, deltaS, StiffnessK, fext, Residualsr):
+    def predict(self, func, u, llambda, delta_s, stiffness_K, f_ext, residuals_R):
 
-        deltaUp, deltalambdap = np.zeros_like(u), 0
+        delta_u_p, delta_lambda_p = np.zeros_like(u), 0
 
-        return u, llambda, deltaUp, deltalambdap, StiffnessK, fext, Residualsr
+        return u, llambda, delta_u_p, delta_lambda_p, stiffness_K, f_ext, residuals_R
 
 
 class _Displacement(_Constraint):
 
     name = "Displacement control"
 
-    def get(self, u, llambda, u0, llambda0, deltaUp, deltalambdap, deltaS, T=None):
-        if T is None:
-            T     = np.zeros_like(u).reshape(len(u))
-            T[8] = 1
+    def get(self, u, llambda, u_0, llambda_0, delta_u_p, delta_lambda_p, delta_s, T=None, controlled_DOF=None):
 
-        g = T.dot(u - (u0 - deltaS))
+        if T is None:
+            T = np.zeros_like(u).reshape(len(u))
+            T[controlled_DOF] = 1
+
+        g = T.dot(u - (u_0 - delta_s))
         h = T
         s = 0
 
         return g, h, s
 
-    def predict(self, func, u, llambda, deltaS, StiffnessK, fext, Residualsr):
+    def predict(self, func, u, llambda, delta_s, stiffness_K, f_ext, residuals_R):
 
-        deltaUp, deltalambdap = np.zeros_like(u), 0
+        delta_u_p, delta_lambda_p = np.zeros_like(u), 0
 
-        return u, llambda, deltaUp, deltalambdap, StiffnessK, fext, Residualsr
-
-
-class _Riks(_Constraint):
-
-    name = "Riks"
-
-    def get(self, u, llambda, u0, llambda0, deltaUp, deltalambdap, deltaS, T=None):
-
-        g = deltaUp.T.dot(u - u0 - deltalambdap * deltaUp) + deltalambdap * (llambda - llambda0 - deltalambdap)
-        h = deltaUp
-        s = deltalambdap
-
-        return g, h, s
-
-    def predict(self, func, u, llambda, deltaS, StiffnessK, fext, Residualsr):
-
-        deltaUp = np.linalg.inv(StiffnessK).dot(fext)
-        
-        kappa = np.transpose(fext).dot(deltaUp) / np.transpose(deltaUp).dot(deltaUp)
-        
-        deltalambdap = np.sign(kappa) * deltaS / np.linalg.norm(deltaUp)
-
-        u, llambda = u + deltalambdap * deltaUp, llambda + deltalambdap
-        StiffnessK, fext, Residualsr = func(deltaUp, deltalambdap)
-
-        return u, llambda, deltaUp, deltalambdap, StiffnessK, fext, Residualsr
+        return u, llambda, delta_u_p, delta_lambda_p, stiffness_K, f_ext, residuals_R
 
 
 class _Arc(_Constraint):
 
     name = "Arc-length"
 
-    def get(self, u, llambda, u0, llambda0, deltaUp, deltalambdap, deltaS, T=None):
+    def get(self, u, llambda, u_0, llambda_0, delta_u_p, delta_lambda_p, delta_s, T=None, controlled_DOF=None):
 
-        g = np.sqrt(np.transpose(u - u0).dot(u - u0) + (llambda - llambda0)**2) - deltaS
-        h = (u - u0) / g
-        s = (llambda - llambda0) / g
+        g = np.sqrt(np.transpose(u - u_0).dot(u - u_0) + (llambda - llambda_0)**2) - delta_s
+        h = (u - u_0) / g
+        s = (llambda - llambda_0) / g
 
         return g, h, s
 
-    def predict(self, func, u, llambda, deltaS, StiffnessK, fext, Residualsr):
+    def predict(self, func, u, llambda, delta_s, stiffness_K, f_ext, residuals_R):
 
-        deltaUp = np.linalg.inv(StiffnessK).dot(fext)
+        delta_u_p = np.linalg.inv(stiffness_K).dot(f_ext)
         
-        kappa = np.transpose(fext).dot(deltaUp) / np.transpose(deltaUp).dot(deltaUp)
+        kappa = np.transpose(f_ext).dot(delta_u_p) / np.transpose(delta_u_p).dot(delta_u_p)
         
-        deltalambdap = np.sign(kappa) * deltaS / np.linalg.norm(deltaUp)
+        delta_lambda_p = np.sign(kappa) * delta_s / np.linalg.norm(delta_u_p)
 
-        u, llambda = u + deltalambdap * deltaUp, llambda + deltalambdap
-        StiffnessK, fext, Residualsr = func(deltaUp, deltalambdap)
+        u, llambda = u + delta_lambda_p * delta_u_p, llambda + delta_lambda_p
+        stiffness_K, f_ext, residuals_R = func(delta_u_p, delta_lambda_p)
         
-        return u, llambda, deltaUp, deltalambdap, StiffnessK, fext, Residualsr
+        return u, llambda, delta_u_p, delta_lambda_p, stiffness_K, f_ext, residuals_R

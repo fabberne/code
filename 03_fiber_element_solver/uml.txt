@@ -1,0 +1,292 @@
+@startuml
+class Solver {
+        __init__()
+    plot_initial_structure()
+    plot_displaced_structure()
+    print_nodal_displacements_and_forces()
+}
+class Linear {
+    solve()
+        structure
+    displacements
+    forces
+    displacements
+    forces
+    __init__()
+}
+class Nonlinear {
+    setConstraint()
+    solve()
+    getSolution()
+        structure
+    attempts
+    NR_tolerance
+    NR_max_iter
+    iteration
+    iteration_section
+    controlled_DOF
+    constraint
+    __init__()
+}
+class Constraint {
+    get()
+    predict()
+    name()
+        _constraint
+    __init__()
+}
+class _Constraint {
+    get()
+    predict()
+    name()
+        __init__()
+}
+class _Load {
+    get()
+    predict()
+        __init__()
+}
+class _Displacement {
+    get()
+    predict()
+        __init__()
+}
+class _Arc {
+    get()
+    predict()
+        __init__()
+}
+Solver <|-- Linear
+Solver <|-- Nonlinear
+_Constraint <|-- _Load
+_Constraint <|-- _Displacement
+_Constraint <|-- _Arc
+
+
+class Beam_Element {
+    get_gauss()
+    get_local_stiffness_matrix()
+    get_global_stiffness_matrix()
+    get_global_force_vector()
+    get_transformation_matrix()
+    get_rotation_matrix()
+    state_determination()
+    get_global_resisting_forces()
+        number_of_cross_sections
+    nodes_initial
+    nodes_displaced
+    length
+    K_local
+    K_global
+    force_increment
+    resisting_forces
+    resisting_forces_converged
+    displacements_residual
+    beam_DOFs
+    K_local
+    K_local
+    K_global
+    K_global
+    resisting_forces
+    K_local
+    __init__()
+}
+class Cross_Section {
+    get_flexibility_matrix()
+    get_global_flexibility_matrix()
+    get_global_residuals()
+    state_determination()
+        geometry
+    beam_element_length
+    gauss_point
+    gauss_weight
+    material_groups
+    fibers_y_coord
+    fibers_z_coord
+    fibers_A
+    fibers_tangent_modulus
+    strains
+    strains_converged
+    strains_increment
+    stresses
+    section_flex_matrix
+    section_b_matrix
+    forces_increment
+    forces
+    forces_converged
+    unbalanced_forces
+    residuals
+    section_flex_matrix
+    section_flex_matrix
+    section_global_flex_matrix
+    forces
+    strains
+    section_flex_matrix
+    unbalanced_forces
+    residuals
+    __init__()
+}
+class Structure {
+    assemble_without_bc()
+    apply_boundary_conditions()
+    assemble()
+    reset_stiffness_and_residual()
+    apply_nodal_loads()
+    set_displaced_nodes()
+    getSystemMatrices()
+    getState()
+    set_section_max_iter_and_tolerance()
+        displacements
+    displacements_converged
+    displacements_increment
+    lambda_factor
+    lambda_factor_converged
+    lambda_factor_increment
+    K_global
+    F_global
+    Residual
+    resisting_forces
+    fixed_DOFs
+    load_DOFs
+    nodal_loads
+    K_global
+    F_global
+    Residual
+    F_global
+    displacements_increment
+    lambda_factor_increment
+    __init__()
+}
+class Frame {
+        number_of_stories
+    story_height
+    story_width
+    number_of_nodes
+    number_of_DOFs
+    structure_nodes_initial
+    __init__()
+}
+class Cantilever {
+        number_of_nodes
+    number_of_DOFs
+    structure_nodes_initial
+    __init__()
+}
+Structure <|-- Frame
+Structure <|-- Cantilever
+
+
+
+class Mesh {
+    get_A_numerical()
+    get_centroid()
+    get_I_numerical()
+    print()
+    plot()
+        mesh_type
+    mesh_size
+    elements
+    node_coords
+    A
+    __init__()
+}
+class Material {
+        gamma
+    E
+    n
+    f_druck
+    f_zug
+    __init__()
+}
+class Concrete_C30_37 {
+    get_stress_vectorized()
+    get_tangent_vectorized()
+        __init__()
+}
+class Steel_S235 {
+    get_stress_vectorized()
+    get_tangent_vectorized()
+        __init__()
+}
+class Steel_S355 {
+    get_stress_vectorized()
+    get_tangent_vectorized()
+        __init__()
+}
+class Rebar_B500B {
+    get_tangent_vectorized()
+    get_stress_vectorized()
+        __init__()
+}
+class Unknown {
+        __init__()
+}
+Material <|-- Concrete_C30_37
+Material <|-- Steel_S235
+Material <|-- Steel_S355
+Material <|-- Rebar_B500B
+Material <|-- Unknown
+class Rectangle {
+    generate_mesh()
+    get_A_analytical()
+    get_I_x_analytical()
+    get_I_y_analytical()
+        width
+    height
+    __init__()
+}
+class T_profile {
+    generate_mesh()
+        web_width
+    web_height
+    flange_width
+    flange_height
+    __init__()
+}
+class H_beam {
+    generate_mesh()
+        web_width
+    web_height
+    flange_width
+    flange_height
+    __init__()
+}
+class Polygon {
+    generate_mesh()
+        points
+    __init__()
+}
+class L_Beam {
+    generate_mesh()
+        h
+    w
+    r_1
+    r_2
+    t
+    cos
+    sin
+    __init__()
+}
+class ReinforcedConcreteColumn {
+    generate_mesh()
+        width
+    height
+    concrete_cover
+    rebar_diameter
+    rebar_spacing
+    __init__()
+}
+class Fiber {
+    get_sorted_coordinates()
+    area()
+    centroid()
+    local_inertia()
+        coords
+    A
+    material
+    material
+    material
+    material
+    __init__()
+}
+@enduml
