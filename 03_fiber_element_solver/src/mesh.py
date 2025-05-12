@@ -1,11 +1,8 @@
 import matplotlib.patches as patches
-import matplotlib.tri as tri
 import matplotlib.pyplot as plt
 
 import numpy as np
 from tabulate import tabulate
-
-import geometry
 
 class Mesh:
 
@@ -23,16 +20,18 @@ class Mesh:
         self.Cx, self.Cy = self.get_centroid()
         self.Ix, self.Iy = self.get_I_numerical()
 
+        
+    #--------------------------------------------------------------------------------------------------------------------------------#
+
 
     def get_A_numerical(self):
         total_area = sum(elem.A for elem in self.elements)
-
         return total_area
+
 
     def get_centroid(self):
         c_x = sum(elem.A * elem.Cx for elem in self.elements) / self.A
         c_y = sum(elem.A * elem.Cy for elem in self.elements) / self.A
-
         return c_x, c_y
     
     
@@ -46,6 +45,9 @@ class Mesh:
 
         return Ix, Iy
 
+        
+    #--------------------------------------------------------------------------------------------------------------------------------#
+
 
     def print(self):
         Mesh_properties = [("Mesh Type"         , self.mesh_type       ),
@@ -55,8 +57,7 @@ class Mesh:
 
         print(tabulate(Mesh_properties, 
                        tablefmt = "fancy_grid", 
-                       floatfmt =        ".2f"
-             ))
+                       floatfmt =        ".2f"))
 
         CS_properties = [(" ", "y", "z")]
     
@@ -66,8 +67,7 @@ class Mesh:
         print(tabulate(CS_properties, 
                        headers  =   "firstrow", 
                        tablefmt = "fancy_grid", 
-                       floatfmt =        ".2f"
-             ))
+                       floatfmt =        ".2f"))
 
 
     def plot(self):
@@ -82,8 +82,7 @@ class Mesh:
             poly = patches.Polygon(np.column_stack([x, y]), 
                                     edgecolor = element.material.color,
                                     facecolor = element.material.color, 
-                                    lw        = 0.3,
-                                    )
+                                    lw        = 0.3)
             ax.add_patch(poly)
 
 

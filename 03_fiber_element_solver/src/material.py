@@ -160,64 +160,6 @@ class Steel_S235(Material):
         # piecewise tangent
         return np.where(np.abs(strains) <= e_y, E, H)
 
-
-
-class Steel_S355(Material):
-
-    def __init__(self):
-
-        gamma   = 78.5 * 10**(-6) # N/mm3
-        E       = 210000          # N/mm2
-        f_druck = 355             # N/mm2
-        f_zug   = 355             # N/mm2
-
-        super().__init__(gamma, E, f_druck, f_zug)
-
-        self.color = (0, 0, 1, 0.5)
-        self.name  = "Steel_S355"
-
-    @staticmethod
-    @jit(nopython=True, cache=True)
-    def get_stress_vectorized(strains):
-        E    = 210000
-        f_y  = 355
-        # yield strain
-        e_y  = f_y / E
-        # small hardening modulus (e.g. 1% of E)
-        H    = 0.01 * E
-
-        abs_eps = np.abs(strains)
-        # elastic region mask
-        elastic = abs_eps <= e_y
-
-        # allocate
-        stress = np.empty_like(strains)
-        # elastic
-        stress[elastic] = E * strains[elastic]
-        # hardening
-        idx = ~elastic
-        stress[idx] = np.sign(strains[idx]) * (
-            f_y + H * (abs_eps[idx] - e_y)
-        )
-        return stress
-
-    @staticmethod
-    @jit(nopython=True, cache=True)
-    def get_tangent_vectorized(strains):
-        """
-        Tangent dσ/dε:
-          = E   for |ε| ≤ ε_y
-          = H   for |ε| > ε_y
-        """
-        E    = 210000
-        f_y  = 355
-        e_y  = f_y / E
-        H    = 0.01 * E
-
-        # piecewise tangent
-        return np.where(np.abs(strains) <= e_y, E, H)
-
-
 class Rebar_B500B(Material):
 
     def __init__(self):

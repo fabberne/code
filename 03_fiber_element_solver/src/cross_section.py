@@ -98,14 +98,20 @@ class Cross_Section:
 
         return self.section_flex_matrix
 
+
     def get_global_flexibility_matrix(self):
         self.section_flex_matrix = self.get_flexibility_matrix()
         self.section_global_flex_matrix = self.section_b_matrix.T @ self.section_flex_matrix @ self.section_b_matrix
 
         return self.section_global_flex_matrix
 
+
     def get_global_residuals(self):
         return self.section_b_matrix.T @ self.residuals
+
+    
+    #--------------------------------------------------------------------------------------------------------------------------------#
+    
 
     def state_determination(self, change_in_force_increment):
 

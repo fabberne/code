@@ -29,6 +29,10 @@ class Beam_Element:
 
         self.beam_DOFs = np.array(beam_DOFs)
 
+
+    #--------------------------------------------------------------------------------------------------------------------------------#
+
+
     def get_gauss(self, number_of_cross_sections):
         if not isinstance(number_of_cross_sections, int):
             raise ValueError(f"Value must be of type int. given type: {type(number_of_cross_sections)}")
@@ -42,6 +46,7 @@ class Beam_Element:
         w = 2 / (number_of_cross_sections * (number_of_cross_sections - 1) * (legendre(number_of_cross_sections - 1)(x)) ** 2)
         return x, w
 
+
     def get_local_stiffness_matrix(self):
         local_flexibility_matrix = np.zeros((5, 5))
         J = self.length / 2
@@ -52,6 +57,7 @@ class Beam_Element:
         self.K_local = np.linalg.inv(local_flexibility_matrix)
 
         return self.K_local
+
 
     def get_global_stiffness_matrix(self):
         # Initialize the global stiffness matrix
@@ -71,8 +77,16 @@ class Beam_Element:
 
         return self.K_global
 
-    def get_global_force_vector(self):
-        return np.zeros((12, 1))
+    
+    def get_global_resisting_forces(self):
+        L   = self.get_transformation_matrix()
+        Rot = self.get_rotation_matrix()
+
+        resisting_forces_global = L @ self.resisting_forces
+        resisting_forces_global = Rot.T @ resisting_forces_global
+
+        return resisting_forces_global
+
 
     def get_transformation_matrix(self):
         # Initialize the transformation matrix
@@ -149,6 +163,10 @@ class Beam_Element:
 
         return T
 
+    
+    #--------------------------------------------------------------------------------------------------------------------------------#
+    
+
     def state_determination(self, displacements_increment):
         T = self.get_rotation_matrix()  
         L = self.get_transformation_matrix()      
@@ -184,14 +202,6 @@ class Beam_Element:
                     self.displacements_residual += J * cross_section.gauss_weight * cross_section.get_global_residuals()
 
         
-    def get_global_resisting_forces(self):
-        L   = self.get_transformation_matrix()
-        Rot = self.get_rotation_matrix()
-
-        resisting_forces_global = L @ self.resisting_forces
-        resisting_forces_global = Rot.T @ resisting_forces_global
-
-        return resisting_forces_global
 
 
 

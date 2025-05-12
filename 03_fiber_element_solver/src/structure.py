@@ -16,48 +16,37 @@ class Structure():
         self.K_global = np.zeros((self.number_of_DOFs, self.number_of_DOFs))
         self.F_global = np.zeros((self.number_of_DOFs, 1))
         self.Residual = np.zeros((self.number_of_DOFs, 1))
-        self.resisting_forces = np.zeros((self.number_of_DOFs, 1))
 
         self.fixed_DOFs  = fixed_DOFs
         self.load_DOFs   = load_DOFs
         self.nodal_loads = nodal_loads
         self.apply_boundary_conditions(fixed_DOFs)
 
+
+    #--------------------------------------------------------------------------------------------------------------------------------#
+
+
     def assemble_without_bc(self):
         self.reset_stiffness_and_residual()
-        # Assemble global stiffness matrix and force vector
-        for i, beam_element in enumerate(self.beam_elements):
-            # Get local stiffness matrix and force vector
-            K_beam = beam_element.get_global_stiffness_matrix()
 
-            # Get global DOF indices for the element
+        for i, beam_element in enumerate(self.beam_elements):
+
+            K_beam = beam_element.get_global_stiffness_matrix()
             dof_indices = beam_element.beam_DOFs
 
-            # Assemble into global stiffness matrix and force vector
             self.K_global[np.ix_(dof_indices, dof_indices)] += K_beam
 
         return
-
-    def apply_boundary_conditions(self, fixed_DOFs):
-        # constrain the base
-        for dof in fixed_DOFs:
-            self.K_global[dof,:] = 0
-            self.K_global[:,dof] = 0
-            self.K_global[dof,dof] = 1.0
-            self.F_global[dof]     = 0.0
 
     def assemble(self):
         self.reset_stiffness_and_residual()
 
         for i, beam_element in enumerate(self.beam_elements):
-            # Get global DOF indices for the element
             dof_indices = beam_element.beam_DOFs
 
-            # Get local stiffness matrix and force vector
             K_beam = beam_element.get_global_stiffness_matrix()
             resisting_forces_beam = beam_element.get_global_resisting_forces()
 
-            # Assemble into global stiffness matrix and force vector
             self.K_global[np.ix_(dof_indices, dof_indices)] += K_beam
             self.Residual[dof_indices] += resisting_forces_beam
 
@@ -72,22 +61,52 @@ class Structure():
 
         self.Residual -= self.F_global * self.lambda_factor
         self.Residual[self.fixed_DOFs] = values
+    
+    
+    #--------------------------------------------------------------------------------------------------------------------------------#
 
-    def reset_stiffness_and_residual(self):
-        self.K_global = np.zeros_like(self.K_global)
-        self.F_global = np.zeros_like(self.F_global)
-        self.Residual = np.zeros_like(self.Residual)
+
+    def apply_boundary_conditions(self, fixed_DOFs):
+        # constrain the base
+        for dof in fixed_DOFs:
+            self.K_global[dof,:] = 0
+            self.K_global[:,dof] = 0
+            self.K_global[dof,dof] = 1.0
+            self.F_global[dof]     = 0.0
+
 
     def apply_nodal_loads(self):
         # Apply nodal loads to the global force vector
         self.F_global = np.zeros((self.number_of_DOFs, 1))
+
         for i, DOF in enumerate(self.load_DOFs):
             self.F_global[DOF] = self.nodal_loads[i]
+    
+    
+    #--------------------------------------------------------------------------------------------------------------------------------#
+
 
     def set_displaced_nodes(self, displacements, scale):
         # Set the displaced nodes based on the displacements
         for i, beam_element in enumerate(self.beam_elements):
-            beam_element.nodes_displaced = beam_element.nodes_initial + scale*displacements[beam_element.beam_DOFs[[0,1,2,6,7,8]]].reshape(2,3)
+            beam_element.nodes_displaced = beam_element.nodes_initial + scale * displacements[beam_element.beam_DOFs[[0,1,2,6,7,8]]].reshape(2,3)
+
+
+    def set_section_max_iter_and_tolerance(self, max_section_iterations, section_tolerance):
+        for beam_element in self.beam_elements:
+            beam_element.max_section_iterations = max_section_iterations
+            for cross_section in beam_element.cross_sections:
+                cross_section.tolerance = section_tolerance
+
+                
+    def reset_stiffness_and_residual(self):
+        self.K_global = np.zeros_like(self.K_global)
+        self.F_global = np.zeros_like(self.F_global)
+        self.Residual = np.zeros_like(self.Residual)
+    
+    
+    #--------------------------------------------------------------------------------------------------------------------------------#
+
 
     def getSystemMatrices(self, displacement_increment, lambda_factor_increment):
 
@@ -106,14 +125,12 @@ class Structure():
 
         return self.K_global, self.F_global, self.Residual
 
+
     def getState(self):
         return self.displacements, self.lambda_factor
 
-    def set_section_max_iter_and_tolerance(self, max_section_iterations, section_tolerance):
-        for beam_element in self.beam_elements:
-            beam_element.max_section_iterations = max_section_iterations
-            for cross_section in beam_element.cross_sections:
-                cross_section.tolerance = section_tolerance
+
+#--------------------------------------------------------------------------------------------------------------------------------#
 
 
 class Frame(Structure):
@@ -171,8 +188,14 @@ class Frame(Structure):
                                                    [self.structure_nodes_initial[bottom_right], 
                                                     self.structure_nodes_initial[top_right]],
                                                    right_col_DOFs))
+
+        #--- Apply Boundary Conditions and prepare iteration variables ---                                           
         fixed_DOFs = [0,1,2,3,4,5,6,7,8,9,10,11]
         super().__init__(fixed_DOFs, load_DOFs, nodal_loads)
+
+
+#--------------------------------------------------------------------------------------------------------------------------------#
+
 
 class Cantilever(Structure):
     def __init__(self, beam, length, number_of_sections_per_elemnt, load_DOFs, nodal_loads):
@@ -192,5 +215,7 @@ class Cantilever(Structure):
                                                 [self.structure_nodes_initial[0], 
                                                  self.structure_nodes_initial[1]],
                                                 [0,1,2,3,4,5,6,7,8,9,10,11]))
+
+        #--- Apply Boundary Conditions and prepare iteration variables ---  
         fixed_DOFs = [0,1,2,3,4,5]
         super().__init__(fixed_DOFs, load_DOFs, nodal_loads)

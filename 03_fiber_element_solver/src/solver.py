@@ -1,12 +1,12 @@
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from print_color import print
 import numpy as np
 import pandas as pd
 import tqdm
-import abc
-import sys
+
 import structure
-from print_color import print
+from constraint import *
 
 class Solver():
 
@@ -81,27 +81,19 @@ class Solver():
     def print_nodal_displacements_and_forces(self):
         # Define labels for the DOFs
         
-        dof_labels = [
-            'u [mm]', 'v [mm]', 'w [mm]', 'θx [rad]', 'θy [rad]', 'θz [rad]'
-        ]
-        F_int_labels = [
-            'Fx [kN]', 'Fy [kN]', 'Fz [kN]', 'Mx [kNm]', 'My [kNm]', 'Mz [kNm]'
-        ]
+        dof_labels   = [ 'u [mm]',  'v [mm]',  'w [mm]', 'θx [rad]', 'θy [rad]', 'θz [rad]']
+        F_int_labels = ['Fx [kN]', 'Fy [kN]', 'Fz [kN]', 'Mx [kNm]', 'My [kNm]', 'Mz [kNm]']
 
         for node in range(self.structure.number_of_nodes):
             u_node     = self.displacements[node*6:(node+1)*6].reshape(6)
-            F_int_node = self.forces[node*6:(node+1)*6].reshape(6)
+            F_int_node = self.forces[       node*6:(node+1)*6].reshape(6)
 
-            F_int_node[[0,1,2]] = F_int_node[[0,1,2]] / 1000.0 # Convert to kN
+            F_int_node[[0,1,2]] = F_int_node[[0,1,2]] / 1000.0    # Convert to kN
             F_int_node[[3,4,5]] = F_int_node[[3,4,5]] / 1000000.0 # Convert to kNm
 
             # Create a DataFrame
-            df1 = pd.DataFrame({
-                'Displacement': u_node
-            }, index=dof_labels)
-            df2 = pd.DataFrame({
-                'Internal Force': F_int_node
-            }, index=F_int_labels)
+            df1 = pd.DataFrame({'Displacement'  : u_node    }, index =   dof_labels)
+            df2 = pd.DataFrame({'Internal Force': F_int_node}, index = F_int_labels)
 
             # Format nicely
             pd.set_option('display.precision', 9)
@@ -110,6 +102,9 @@ class Solver():
             print("Node", node)
             print(df1)
             print(df2)
+
+
+#--------------------------------------------------------------------------------------------------------------------------------#
 
 
 class Linear(Solver):
@@ -134,10 +129,15 @@ class Linear(Solver):
         return
     
 
+#--------------------------------------------------------------------------------------------------------------------------------#
 
 
 class Nonlinear(Solver):
-    def __init__(self, structure, constraint="Load", NR_tolerance=1e-6, NR_max_iter=100, section_tolerance=1e-6, section_max_iter=100, controlled_DOF=None):
+    def __init__(self, structure, constraint = "Load", 
+                 NR_tolerance      = 1e-6, NR_max_iter      = 100, 
+                 section_tolerance = 1e-6, section_max_iter = 100, 
+                 controlled_DOF=None):
+
         self.structure = structure
 
         self.attempts = 5
@@ -150,26 +150,17 @@ class Nonlinear(Solver):
         self.iteration = 0
         self.iteration_section = 0
 
-        self.setConstraint(constraint)
+        if constraint == "Load":
+            self.constraint = Load()
+        elif constraint == "Displacement":
+            self.constraint = Displacement()
+        elif constraint == "Arc":
+            self.constraint = Arc()
+        else:
+            raise ValueError(f"Unknown constraint type: '{constraint}'. Expected one of 'Load', 'Displacement', or 'Arc'.")
+            
         self.controlled_DOF = controlled_DOF
 
-    def setConstraint(self, constraint):
-
-        """
-        Specify the type of constraint.
-
-        Parameters
-        ----------
-        constraint: str
-                The type of constraint to be used.
-
-        Raises
-        ------
-        ValueError
-                If an invalid type of constraint is specified.
-        """
-
-        self.constraint = Constraint(constraint)
 
     def solve(self, increments):
 
@@ -184,16 +175,17 @@ class Nonlinear(Solver):
 
             # displacement and load at the beginning of the step
             u0, lambda0 = self.structure.getState()
-            lambda0 = float(lambda0)
-            u0 = u0.copy()
+            lambda0     = float(lambda0)
+            u0          = u0.copy()
 
 
             while (not convergence_boolean) and (attempt <= self.attempts):
                 print("   Attempt ", attempt)
-                u, llambda, convergence_boolean = self.getSolution(
-                    u0, lambda0, increments[step], self.controlled_DOF
-                )
                 attempt += 1
+
+                u, llambda, convergence_boolean = self.getSolution(u0, lambda0, 
+                                                                   increments[step], 
+                                                                   self.controlled_DOF)
 
                 if (not convergence_boolean) and (attempt <= self.attempts):
                     increments[step] *= 0.5
@@ -214,38 +206,25 @@ class Nonlinear(Solver):
         Stiffness_K, fext, ResidualsR = self.structure.K_global, self.structure.F_global, self.structure.Residual
         convergence_norm = max(np.linalg.norm(fext),1)
 
-        #___ # Step 1: Predict the solution at the beginning of the step ___
-        (
-            u,
-            llambda,
-            deltaUp,
-            deltalambdap,
-            Stiffness_K,
-            fext,
-            ResidualsR,
-        ) = self.constraint.predict(
-            self.structure.getSystemMatrices,
-            u0,
-            lambda0,
-            increment,
-            Stiffness_K,
-            fext,
-            ResidualsR,
-        )
+        #___ Step 1: Predict the solution at the beginning of the step ___
+        (u, llambda, deltaUp, deltalambdap, Stiffness_K, fext, ResidualsR,
+        ) = self.constraint.predict(self.structure.getSystemMatrices,
+                                    u0, lambda0, increment, Stiffness_K, 
+                                    fext, ResidualsR)
         
         for iteration in range(self.NR_max_iter):
 
             #___ Step 2: Calculate the deformation increments ___
             print("      NR Iteration ", iteration)
-            g, h, s = self.constraint.get(
-                u, llambda, u0, lambda0, deltaUp, deltalambdap, increment, controlled_DOF=controlled_DOF
-            )
+            g, h, s = self.constraint.get(u, llambda, u0, lambda0, 
+                                          deltaUp, deltalambdap,
+                                          increment, controlled_DOF=controlled_DOF)
 
             du_tilde        =   np.linalg.inv(Stiffness_K).dot(fext)
             du_double_tilde = - np.linalg.inv(Stiffness_K).dot(ResidualsR)
 
-            deltalambdap = - (g + np.transpose(h).dot(du_double_tilde)) / (s +np.transpose(h).dot(du_tilde))
-            deltaUp      = deltalambdap * du_tilde + du_double_tilde
+            deltalambdap    = - (g + np.transpose(h).dot(du_double_tilde)) / (s +np.transpose(h).dot(du_tilde))
+            deltaUp         = deltalambdap * du_tilde + du_double_tilde
             
             #___ Steps 3 - 14 ___
             Stiffness_K, fext, ResidualsR = self.structure.getSystemMatrices(deltaUp, deltalambdap)
@@ -253,10 +232,7 @@ class Nonlinear(Solver):
             # Update the solution variables
             u       = self.structure.displacements
             llambda = self.structure.lambda_factor
-
-            print("fext:", np.linalg.norm(self.structure.F_global))
             
-
             #___ Step 15: Check convergence criteria ___
             print("      Residuals Norm ", np.linalg.norm(ResidualsR), color="red")
 
@@ -288,237 +264,3 @@ class Nonlinear(Solver):
             return -u, -llambda, convergence_boolean
         else:
             return  u,  llambda, convergence_boolean
-
-
-class Constraint:
-
-    """
-    Description
-
-    Parameters
-    ----------
-    constraint: str
-            The type of constraint to be used
-                    'Arc'          : Arc-length method
-                    'Displacement' : Displacement control
-                    'Load'         : Load control
-
-    Attributes
-    ----------
-    name: str
-            The name of the constraint function.
-
-    Methods
-    -------
-    get(x, c, x0, c0, dx, dc, S, length, *args)
-            Get the value of the constraint function and its derivatives.
-    predict(func, x, c, A, b, r)
-            Predict the solution at the beginning of the step.
-
-    Raises
-    ------
-    KeyError
-            If an invalid type of constraint is specified.
-    """
-
-    __constraints = {
-        "Displacement": "_Displacement",
-        "Load": "_Load",
-        "Arc": "_Arc"
-    }
-
-    def __init__(self, constraint):
-
-        module = sys.modules[__name__]
-
-        try:
-            constraint = getattr(module, self.__constraints[constraint])
-        except KeyError:
-            raise KeyError("Invalid type of constraint")
-
-        self._constraint = constraint()
-
-    def get(
-        self, u, llambda, u0, llambda0, deltaUp, deltalambdap, deltaS, T=None, controlled_DOF=None, *args
-    ):
-        """
-        Get the values of the constraint function and the gradients with
-        respect to the independent variable and the scale factor.
-
-        Parameters
-        ----------
-        u: ndarray
-                The current value of the independent variable.
-        llambdas: ndarray
-                The current value of the scale factor.
-        u0: ndarray
-                The value of the independent variable at the beginning of the step.
-        lambda0: ndarray
-                The value of the scale factor at the beginning of the step.
-        deltaUp: ndarray
-                The increment of the independent variable.
-        deltalambdap: ndarray
-                The increment of the scale factor.
-        T: ndarray
-                The selection matrix of the independent variable.
-        deltaS: float
-                The increment of the arc length.
-
-        Returns
-        -------
-        g: float
-                The value of the constraint function.
-        h: ndarray
-                The derivative of the constraint function with respect to the
-                independent variable.
-        s: float
-                The derivative of the constraint function with respect to the
-                scaling factor.
-        """
-
-        g, h, s = self._constraint.get(
-            u, llambda, u0, llambda0, deltaUp, deltalambdap, deltaS, controlled_DOF=controlled_DOF, T=None, *args
-        )
-
-        return g, h, s
-
-    def predict(self, func, u, llambda, deltaS, StiffnessK, fext, Residualsr):
-
-        """
-        Get the prediction at the beginning of each solution step.
-
-        Parameters
-        ----------
-        func: callable
-                ...
-        u: ndarray
-                The initial value of the solution variable.
-        llambda: float
-                The initial value of the scale factor.
-        deltaS: float
-                The increment of the arc length.
-        StiffnessK: ndarray
-                The tangent coefficient matrix.
-        fext: ndarray
-                The constant vector.
-        Residualsr: ndarray
-                The residual vector.
-
-        Returns
-        -------
-        u: ndarray
-                The solution variable at the prediction point.
-        llambda: float
-                The scale factor at the prediction point.
-        deltaUp: ndarray
-                The predicted solution increment.
-        deltalambdap: float
-                The predicted scale factor increment.
-        StiffnessK: ndarray
-                The tangent coefficient matrix at the prediciton point.
-        fext: ndarray
-                The constant vector at the prediction point.
-        Residualsr: ndarray
-                The residual vector at the prediction point.
-        """
-
-        (
-            u,
-            llambda,
-            deltaUp,
-            deltalambdap,
-            StiffnessK,
-            fext,
-            Residualsr,
-        ) = self._constraint.predict(
-            func, u, llambda, deltaS, StiffnessK, fext, Residualsr
-        )
-
-        return u, llambda, deltaUp, deltalambdap, StiffnessK, fext, Residualsr
-
-    @property
-    def name(self):
-        return self._constraint.name
-
-
-class _Constraint(abc.ABC):
-    @abc.abstractmethod
-    def get(self):
-        pass
-
-    @abc.abstractmethod
-    def predict(self):
-        pass
-
-    @property
-    @abc.abstractmethod
-    def name(self):
-        pass
-
-
-class _Load(_Constraint):
-
-    name = "Load control"
-
-    def get(self, u, llambda, u_0, llambda_0, delta_u_p, delta_lambda_p, delta_s, T=None, controlled_DOF=None):
-
-        g = llambda - llambda_0 - delta_s
-        h = np.zeros_like(u)
-        s = 1
-
-        return g, h, s
-
-    def predict(self, func, u, llambda, delta_s, stiffness_K, f_ext, residuals_R):
-
-        delta_u_p, delta_lambda_p = np.zeros_like(u), 0
-
-        return u, llambda, delta_u_p, delta_lambda_p, stiffness_K, f_ext, residuals_R
-
-
-class _Displacement(_Constraint):
-
-    name = "Displacement control"
-
-    def get(self, u, llambda, u_0, llambda_0, delta_u_p, delta_lambda_p, delta_s, T=None, controlled_DOF=None):
-
-        if T is None:
-            T = np.zeros_like(u).reshape(len(u))
-            T[controlled_DOF] = 1
-
-        g = T.dot(u - (u_0 - delta_s))
-        h = T
-        s = 0
-
-        return g, h, s
-
-    def predict(self, func, u, llambda, delta_s, stiffness_K, f_ext, residuals_R):
-
-        delta_u_p, delta_lambda_p = np.zeros_like(u), 0
-
-        return u, llambda, delta_u_p, delta_lambda_p, stiffness_K, f_ext, residuals_R
-
-
-class _Arc(_Constraint):
-
-    name = "Arc-length"
-
-    def get(self, u, llambda, u_0, llambda_0, delta_u_p, delta_lambda_p, delta_s, T=None, controlled_DOF=None):
-
-        g = np.sqrt(np.transpose(u - u_0).dot(u - u_0) + (llambda - llambda_0)**2) - delta_s
-        h = (u - u_0) / g
-        s = (llambda - llambda_0) / g
-
-        return g, h, s
-
-    def predict(self, func, u, llambda, delta_s, stiffness_K, f_ext, residuals_R):
-
-        delta_u_p = np.linalg.inv(stiffness_K).dot(f_ext)
-        
-        kappa = np.transpose(f_ext).dot(delta_u_p) / np.transpose(delta_u_p).dot(delta_u_p)
-        
-        delta_lambda_p = np.sign(kappa) * delta_s / np.linalg.norm(delta_u_p)
-
-        u, llambda = u + delta_lambda_p * delta_u_p, llambda + delta_lambda_p
-        stiffness_K, f_ext, residuals_R = func(delta_u_p, delta_lambda_p)
-        
-        return u, llambda, delta_u_p, delta_lambda_p, stiffness_K, f_ext, residuals_R
