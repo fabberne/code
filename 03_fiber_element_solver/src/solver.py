@@ -225,16 +225,17 @@ class Nonlinear(Solver):
 
             deltalambdap    = - (g + np.transpose(h).dot(du_double_tilde)) / (s +np.transpose(h).dot(du_tilde))
             deltaUp         = deltalambdap * du_tilde + du_double_tilde
-            
+
             #___ Steps 3 - 14 ___
             Stiffness_K, fext, ResidualsR = self.structure.getSystemMatrices(deltaUp, deltalambdap)
         
             # Update the solution variables
             u       = self.structure.displacements
-            llambda = self.structure.lambda_factor
+            llambda = self.structure.lambda_factor_converged
             
             #___ Step 15: Check convergence criteria ___
-            print("      Residuals Norm ", np.linalg.norm(ResidualsR), color="red")
+            print("      Residuals Norm ", np.linalg.norm(ResidualsR))
+
 
             if np.linalg.norm(ResidualsR) <= self.NR_tolerance * convergence_norm:
                 print("NR Converged!")

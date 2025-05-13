@@ -2,9 +2,7 @@ import numpy as np
 from numba import jit
 
 class Material:
-
     def __init__(self, gamma, E, f_druck, f_zug):
-
         self.gamma = gamma
         self.E     = E
         self.n     = 0.5
@@ -12,8 +10,11 @@ class Material:
         self.f_druck = f_druck
         self.f_zug   = f_zug
 
-class Concrete_C30_37(Material):
 
+#--------------------------------------------------------------------------------------------------------------------------------#
+
+
+class Concrete(Material):
     def __init__(self):
         gamma   = 25 * 10**(-6)  # N/mm3
         E       = 32000          # N/mm2
@@ -23,6 +24,7 @@ class Concrete_C30_37(Material):
         super().__init__(gamma, E, f_druck, f_zug)
         self.color = (0, 0, 0, 0.5)
         self.name  = "Concrete_C30_37"
+
 
     @staticmethod
     @jit(nopython=True, cache=True)
@@ -37,23 +39,22 @@ class Concrete_C30_37(Material):
         c = 0.02 * f_druck
 
         # Vectorized calculation
-        stresses = np.where(
-            strains <= 0,                       # Negative strain (tensile behavior)
-            np.clip(E * strains, -f_zug, 0),  
+        stresses = np.where(strains <= 0, 
+            # Negative strain (tensile behavior)
+            np.clip(E * strains, -f_zug, 0),
             
-            np.where(
-                strains <= e_max,      # Ascending branch
+            np.where(strains <= e_max, 
+                # Ascending branch
                 f_druck * (strains / e_max) ** ((a * (1 - strains / e_max)) /(1 + b * strains / e_max)),
-
                 # Descending branch
                 f_druck * (strains / e_max) ** (((c **(e_max / strains)) * (1 - (strains / e_max) ** c)) / (1 + (strains / e_max) ** c))
             )
         )
-        
         # Ensure zero stress below tensile failure limit
         stresses[stresses <= -f_zug] = 0
 
         return stresses
+
 
     @staticmethod
     @jit(nopython=True, cache=True)
@@ -103,10 +104,80 @@ class Concrete_C30_37(Material):
         return tangents
         
     
+#--------------------------------------------------------------------------------------------------------------------------------#
+
+
+class Concrete_C30_37(Material):
+    def __init__(self):
+        gamma   = 25 * 10**(-6)  # N/mm3
+        E       = 32000          # N/mm2
+        f_druck = 20             # N/mm2
+        f_zug   = 1.28           # N/mm2
+
+        super().__init__(gamma, E, f_druck, f_zug)
+        self.color = (0, 0, 0, 0.5)
+        self.name  = "Concrete_C30_37"
+
+
+    @staticmethod
+    @jit(nopython=True, cache=True)
+    def get_stress_vectorized(strains):
+        E       = 12000.0
+        f_c     = 30.0
+        eps_c   = 0.0025
+        eps_u   = 0.025
+        f_t     = 1.28
+        eps_t   = - f_t / E
+
+        stresses = np.zeros_like(strains)
+
+        # Tension: 0 <= eps < eps_t
+        tension_mask = (strains <= 0) & (strains > eps_t)
+        stresses[tension_mask] = E * strains[tension_mask]
+
+        # Compression (elastic): eps_c < eps < 0
+        comp_elastic_mask = (strains > 0) & (strains < eps_c)
+        stresses[comp_elastic_mask] = E * strains[comp_elastic_mask]
+
+        # Compression (softening): eps_u <= eps <= eps_c
+        comp_soften_mask = (strains >= eps_c) & (strains <= eps_u)
+        stresses[comp_soften_mask] = f_c * (eps_u - strains[comp_soften_mask]) / (eps_u - eps_c)
+
+        # Everything else (cracked tension, failed compression) remains 0
+        return stresses
+
+
+    @staticmethod
+    @jit(nopython=True, cache=True)
+    def get_tangent_vectorized(strains):
+        E       = 12000.0
+        f_c     = 30.0
+        eps_c   = 0.0025
+        eps_u   = 0.025
+        f_t     = 1.28
+        eps_t   = - f_t / E
+
+        tangents = np.zeros_like(strains)
+
+        # Tension: 0 <= eps < eps_t
+        tension_mask = (strains <= 0) & (strains > eps_t)
+        tangents[tension_mask] = E
+
+        # Compression (elastic): eps_c < eps < 0
+        comp_elastic_mask = (strains > 0) & (strains < eps_c)
+        tangents[comp_elastic_mask] = E
+
+        # Compression (softening): eps_u <= eps <= eps_c
+        comp_soften_mask = (strains >= eps_c) & (strains <= eps_u)
+        tangents[comp_soften_mask] = - f_c / (eps_u - eps_c)
+
+        return tangents
+        
+    
+#--------------------------------------------------------------------------------------------------------------------------------#
 
 
 class Steel_S235(Material):
-
     def __init__(self):
 
         gamma   = 78.5 * 10**(-6) # N/mm3
@@ -117,16 +188,26 @@ class Steel_S235(Material):
         super().__init__(gamma, E, f_druck, f_zug)
 
         self.color = (0, 0, 1, 0.5)
-        self.name  = "Steel_S235" 
+        self.name  = "Steel_S235"
+
+
+    @staticmethod
+    @jit(nopython=True, cache=True)
+    def get_tangent_vectorized(strains):
+        E    = 210000
+        f_y  = 235
+        e_y  = f_y / E
+        H    = 0.01 * E
+
+        return np.where(np.abs(strains) <= e_y, E, H)
+
 
     @staticmethod
     @jit(nopython=True, cache=True)
     def get_stress_vectorized(strains):
         E    = 210000
         f_y  = 235
-        # yield strain
         e_y  = f_y / E
-        # small hardening modulus (e.g. 1% of E)
         H    = 0.01 * E
 
         abs_eps = np.abs(strains)
@@ -144,24 +225,11 @@ class Steel_S235(Material):
         )
         return stress
 
-    @staticmethod
-    @jit(nopython=True, cache=True)
-    def get_tangent_vectorized(strains):
-        """
-        Tangent dσ/dε:
-          = E   for |ε| ≤ ε_y
-          = H   for |ε| > ε_y
-        """
-        E    = 210000
-        f_y  = 235
-        e_y  = f_y / E
-        H    = 0.01 * E
 
-        # piecewise tangent
-        return np.where(np.abs(strains) <= e_y, E, H)
+#--------------------------------------------------------------------------------------------------------------------------------#
+
 
 class Rebar_B500B(Material):
-
     def __init__(self):
 
         gamma   = 78.5 * 10**(-6) # N/mm3
@@ -174,6 +242,7 @@ class Rebar_B500B(Material):
         self.color = (0, 0.2, 1, 0.5)
         self.name  = "Rebar_B500B" 
     
+
     @staticmethod
     @jit(nopython=True, cache=True)
     def get_tangent_vectorized(strains):
@@ -192,6 +261,7 @@ class Rebar_B500B(Material):
         # piecewise: E or E_h
         return np.where(np.abs(strains) <= e_s, E, E_h)
     
+
     @staticmethod
     @jit(nopython=True, cache=True)
     def get_stress_vectorized(strains):
@@ -208,6 +278,10 @@ class Rebar_B500B(Material):
             np.sign(strains) * (f_druck + E_h * (np.abs(strains) - e_s))
         )
         return stresses
+
+
+#--------------------------------------------------------------------------------------------------------------------------------#
+
 
 class Unknown(Material):
 

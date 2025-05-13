@@ -68,7 +68,7 @@ class Arc(Constraint):
 
 
     def predict(self, func, u, llambda, delta_s, stiffness_K, f_ext, residuals_R):
-        delta_u_p = np.linalg.inv(stiffness_K).dot(f_ext)
+        delta_u_p = np.linalg.solve(stiffness_K, f_ext)
         
         kappa = np.transpose(f_ext).dot(delta_u_p) / np.transpose(delta_u_p).dot(delta_u_p)
         
