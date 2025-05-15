@@ -27,8 +27,13 @@ class Solver():
                     [start_node[1], end_node[1]],
                     [start_node[2], end_node[2]],
                     color='k', linewidth=2)
+            gauss = beam.gauss_points
+            for eta in gauss:
+                p = (eta + 1) / 2
+                point = start_node + p * (end_node - start_node)
+                ax.scatter(*point, color='k', marker='s',s=20)
 
-        ax.set_box_aspect((np.ptp([0,7000]), np.ptp([-2000,2000]), np.ptp([0,9000])))
+        ax.set_box_aspect((np.ptp([0,7000]), np.ptp([-2000,2000]), np.ptp([0,3000])))
 
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
@@ -71,7 +76,7 @@ class Solver():
                     color='r', linewidth=2, zorder=0)
 
         ax.set_ylim([-2000, 2000])
-        ax.set_box_aspect((np.ptp([0,7000]), np.ptp([-2000,2000]), np.ptp([0,9000])))
+        ax.set_box_aspect((np.ptp([0,7000]), np.ptp([-2000,2000]), np.ptp([0,3000])))
 
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
