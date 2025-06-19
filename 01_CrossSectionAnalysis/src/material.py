@@ -73,11 +73,25 @@ class Steel_S235(Material):
     @staticmethod
     @jit(nopython=True, cache=True)
     def get_stress_vectorized(strains):
-        E       = 210000          # N/mm2
-        f_druck = 235             # N/mm2
+        E    = 210000
+        f_y  = 235
+        e_y  = f_y / E
+        H    = 0.01 * E
 
-        stresses = np.sign(E * strains) * np.minimum(f_druck, np.abs(E * strains))
-        return stresses
+        abs_eps = np.abs(strains)
+        # elastic region mask
+        elastic = abs_eps <= e_y
+
+        # allocate
+        stress = np.empty_like(strains)
+        # elastic
+        stress[elastic] = E * strains[elastic]
+        # hardening
+        idx = ~elastic
+        stress[idx] = np.sign(strains[idx]) * (
+            f_y + H * (abs_eps[idx] - e_y)
+        )
+        return stress
 
 
 

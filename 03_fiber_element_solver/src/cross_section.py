@@ -65,6 +65,7 @@ class Cross_Section:
         self.forces_converged  = np.zeros((3, 1))
         self.unbalanced_forces = np.zeros((3, 1))
         self.residuals         = np.zeros((3, 1))
+        self.curvature         = np.zeros((3, 1))
 
 
     #--------------------------------------------------------------------------------------------------------------------------------#
@@ -120,7 +121,7 @@ class Cross_Section:
         self.forces = self.forces_converged + self.forces_increment
 
         change_in_deformation_increment = self.residuals + self.section_flex_matrix @ change_in_force_increment
-
+        self.curvature += change_in_deformation_increment
         # fiber level state determination
         self.change_in_strain_increment = (- self.fibers_y_coord * change_in_deformation_increment[0] 
                                            + self.fibers_z_coord * change_in_deformation_increment[1]

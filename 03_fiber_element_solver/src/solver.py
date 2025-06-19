@@ -171,6 +171,8 @@ class Nonlinear(Solver):
 
         lambda_history = np.zeros(len(increments) + 1)
         u_history      = np.zeros((len(increments) + 1, self.structure.number_of_DOFs))
+        section_forces_history  = np.zeros((len(increments), len(self.structure.beam_elements), len(self.structure.beam_elements[0].cross_sections), 3))
+        section_strains_history = np.zeros((len(increments), len(self.structure.beam_elements), len(self.structure.beam_elements[0].cross_sections), 3))
 
         for step in tqdm.tqdm_notebook(range(len(increments))):
             print("----------------------------------------------")
@@ -188,7 +190,7 @@ class Nonlinear(Solver):
                 print("   Attempt ", attempt)
                 attempt += 1
 
-                u, llambda, convergence_boolean = self.getSolution(u0, lambda0, 
+                u, llambda, convergence_boolean, section_forces, section_strains = self.getSolution(u0, lambda0, 
                                                                    increments[step], 
                                                                    self.controlled_DOF)
 
@@ -201,8 +203,11 @@ class Nonlinear(Solver):
 
             u_history[step + 1, :]   = u.reshape(self.structure.number_of_DOFs)
             lambda_history[step + 1] = llambda
+            section_forces_history[step, :, :, :]  = np.array(section_forces)
+            section_strains_history[step, :, :, :] = np.array(section_strains)
 
-        return u_history, lambda_history
+
+        return u_history, lambda_history, section_forces_history, section_strains_history
 
 
     def getSolution(self, u0, lambda0, increment, controlled_DOF=None):
@@ -216,6 +221,9 @@ class Nonlinear(Solver):
         ) = self.constraint.predict(self.structure.getSystemMatrices,
                                     u0, lambda0, increment, Stiffness_K, 
                                     fext, ResidualsR)
+
+        section_forces  = np.zeros((len(self.structure.beam_elements), len(self.structure.beam_elements[0].cross_sections), 3))
+        section_strains = np.zeros((len(self.structure.beam_elements), len(self.structure.beam_elements[0].cross_sections), 3))
         
         for iteration in range(self.NR_max_iter):
 
@@ -251,13 +259,15 @@ class Nonlinear(Solver):
                 self.structure.lambda_factor_increment = 0.0
                 self.structure.displacements_converged = self.structure.displacements
                 self.structure.lambda_factor_converged = self.structure.lambda_factor
-                for beam_element in self.structure.beam_elements:
+                for i, beam_element in enumerate(self.structure.beam_elements):
                     beam_element.resisting_forces_converged = beam_element.resisting_forces
                     beam_element.force_increment.fill(0.0)
 
-                    for section in beam_element.cross_sections:
+                    for j, section in enumerate(beam_element.cross_sections):
                         section.forces_converged = section.forces
                         section.forces_increment.fill(0.0)
+                        section_forces[i, j, :]  = section.forces_converged.reshape(3)
+                        section_strains[i, j, :] = section.curvature.reshape(3)
 
                         section.strains_converged = section.strains
                         section.strains_increment.fill(0.0)
@@ -267,6 +277,6 @@ class Nonlinear(Solver):
                 convergence_boolean = False
                 
         if self.constraint.name == "Displacement control":
-            return -u, -llambda, convergence_boolean
+            return -u, -llambda, convergence_boolean, section_forces, section_strains
         else:
-            return  u,  llambda, convergence_boolean
+            return  u,  llambda, convergence_boolean, section_forces, section_strains
