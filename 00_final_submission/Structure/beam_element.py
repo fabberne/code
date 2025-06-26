@@ -1,4 +1,4 @@
-from cross_section import *
+from .cross_section import *
 from scipy.special import legendre
 
 class Beam_Element:

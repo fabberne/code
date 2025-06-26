@@ -1,4 +1,4 @@
-from beam_element import *
+from .beam_element import *
 
 import numpy as np
 

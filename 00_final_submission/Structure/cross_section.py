@@ -1,7 +1,7 @@
 import numpy as np
-
 from collections import defaultdict
-from fiber import Fiber
+
+from .fiber import Fiber
 
 class Cross_Section:
     def __init__(self, geometry, gauss_point, gauss_weight, beam_element_length):

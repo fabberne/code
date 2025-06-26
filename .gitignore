@@ -1,5 +1,9 @@
 01_CrossSectionAnalysis/src/__pycache__/
 00_final_submission/src/__pycache__/
+00_final_submission/Structure/__pycache__/
+00_final_submission/Material/__pycache__/
+00_final_submission/Solver/__pycache__/
+00_final_submission/Plotting_functions/__pycache__/
 02_linear_FEM/__pycache__/
 03_fiber_element_solver/__pycache__/
 03_fiber_element_solver/src/__pycache__/

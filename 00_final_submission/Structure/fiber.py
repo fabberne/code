@@ -1,6 +1,6 @@
 import numpy as np
 
-from material import *
+from Material import *
 
 class Fiber: 
 
