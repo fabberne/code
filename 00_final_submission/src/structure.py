@@ -4,7 +4,6 @@ import numpy as np
 
 class Structure():
     def __init__(self, fixed_DOFs, load_DOFs, nodal_loads):
-        #--- set variable for NR solver ---
         self.displacements           = np.zeros((self.number_of_DOFs, 1))
         self.displacements_converged = np.zeros((self.number_of_DOFs, 1))
         self.displacements_increment = np.zeros((self.number_of_DOFs, 1))

@@ -388,7 +388,7 @@ class Polygon:
 
         return elements, node_coords
 
-class L_Beam:
+class L_beam:
 
     def __init__(self, width, height, thickness, r_corner, r_edge, rotation_angle = 0):
 
@@ -533,105 +533,6 @@ class ReinforcedConcreteColumn:
             gmsh.model.geo.addCircleArc((i+1) * 10 + 4, (i+1) * 10, (i+1) * 10 + 1, (i+1) * 100 + 3)
 
         rebar_loops    = [gmsh.model.geo.addCurveLoop([(i+1) * 100 + 0, (i+1) * 100 + 1, (i+1) * 100 + 2, (i+1) * 100 + 3]) for i in range(number_of_rebars * 2)]
-
-        # Create plane surface
-        concrete_surface = gmsh.model.geo.addPlaneSurface([outer_loop] + rebar_loops)
-        rebar_surfaces   = [gmsh.model.geo.addPlaneSurface([loop]) for loop in rebar_loops]
-        gmsh.model.geo.synchronize()
-
-        # Assign physical groups
-        concrete_group = gmsh.model.addPhysicalGroup(2, [concrete_surface])
-        rebar_group    = gmsh.model.addPhysicalGroup(2, rebar_surfaces)
-
-        gmsh.model.geo.synchronize()
-
-        gmsh.model.mesh.generate(2)
-
-        node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
-        node_coords = np.array(node_coords).reshape(-1, 3)[:, :2]
-        elem_types, elem_tags, elem_nodes = gmsh.model.mesh.getElements()
-
-        concrete_elements = set(gmsh.model.mesh.getElementsByType(2, concrete_surface)[0])
-        rebar_elements    = []
-        for surface in rebar_surfaces:
-            rebar_elements.append(list(gmsh.model.mesh.getElementsByType(2, surface)[0]))
-        rebar_elements = set([item for sublist in rebar_elements for item in sublist])
-
-        gmsh.finalize()
-
-        element_nodes = []
-        for i, e_type in enumerate(elem_types):
-            if e_type == 2:
-                element_nodes = np.array(elem_nodes[i]).reshape(-1, 3) - 1
-            if e_type == 3:
-                element_nodes = np.array(elem_nodes[i]).reshape(-1, 4) - 1
-
-        elements = []
-        for i, elem in enumerate(element_nodes):
-            if type == "triangle":
-                nodes = np.where((node_tags == elem[0] + 1) | (node_tags == elem[1] + 1) | (node_tags == elem[2] + 1))[0]
-            else:
-                nodes = np.where((node_tags == elem[0] + 1) | (node_tags == elem[1] + 1) | (node_tags == elem[2] + 1) | (node_tags == elem[3] + 1))[0]
-
-            if i+1 in concrete_elements:
-                elements.append(Fiber(node_coords[nodes], nodes=nodes, mat="Concrete_C30_37"))
-            elif i+1 in rebar_elements:
-                elements.append(Fiber(node_coords[nodes], nodes=nodes, mat="Rebar_B500B"))
-            else:
-                elements.append(Fiber(node_coords[nodes], nodes=nodes, mat="unknown"))
-
-        return elements, node_coords
-
-
-class Simple_RC_Column:
-    def __init__(self, width, height, concrete_cover, rebar_diameter):
-        self.width  = width
-        self.height = height
-
-        self.concrete_cover = concrete_cover
-        self.rebar_diameter = rebar_diameter
-
-    def generate_mesh(self, type="triangle", size=0.1):
-        
-        gmsh.initialize()
-        gmsh.model.add("rectangle_with_hole")
-
-        # Define concrete points
-        gmsh.model.geo.addPoint(-self.width/2,-self.height/2, 0, size, 1)
-        gmsh.model.geo.addPoint( self.width/2,-self.height/2, 0, size, 2)
-        gmsh.model.geo.addPoint( self.width/2, self.height/2, 0, size, 3)
-        gmsh.model.geo.addPoint(-self.width/2, self.height/2, 0, size, 4)
-
-        gmsh.model.geo.addLine(1, 2, 1)
-        gmsh.model.geo.addLine(2, 3, 2)
-        gmsh.model.geo.addLine(3, 4, 3)
-        gmsh.model.geo.addLine(4, 1, 4)
-
-        outer_loop = gmsh.model.geo.addCurveLoop([1, 2, 3, 4])
-        
-        # Define rebar
-        rebar_positions_x = np.linspace(-self.width/2 + self.concrete_cover + self.rebar_diameter/2, 
-                                         self.width/2 - self.concrete_cover - self.rebar_diameter/2, 
-                                         2)
-        rebar_positions_x = np.concatenate([rebar_positions_x, rebar_positions_x])
-
-        rebar_positions_y_1 = np.ones(2) * self.height/2 - self.concrete_cover - self.rebar_diameter/2
-        rebar_positions_y_2 = np.ones(2) *-self.height/2 + self.concrete_cover + self.rebar_diameter/2
-        rebar_positions_y   = np.concatenate([rebar_positions_y_1, rebar_positions_y_2])
-
-        d = self.rebar_diameter
-        for i, (x, y) in enumerate(zip(rebar_positions_x, rebar_positions_y)):
-            gmsh.model.geo.addPoint(x - d/2, y - d/2, 0, d, (i+1) * 10 + 1)
-            gmsh.model.geo.addPoint(x + d/2, y - d/2, 0, d, (i+1) * 10 + 2)
-            gmsh.model.geo.addPoint(x + d/2, y + d/2, 0, d, (i+1) * 10 + 3)
-            gmsh.model.geo.addPoint(x - d/2, y + d/2, 0, d, (i+1) * 10 + 4)
-        
-            gmsh.model.geo.addLine((i+1) * 10 + 1, (i+1) * 10 + 2, (i+1) * 100 + 0)
-            gmsh.model.geo.addLine((i+1) * 10 + 2, (i+1) * 10 + 3, (i+1) * 100 + 1)
-            gmsh.model.geo.addLine((i+1) * 10 + 3, (i+1) * 10 + 4, (i+1) * 100 + 2)
-            gmsh.model.geo.addLine((i+1) * 10 + 4, (i+1) * 10 + 1, (i+1) * 100 + 3)
-
-        rebar_loops    = [gmsh.model.geo.addCurveLoop([(i+1) * 100 + 0, (i+1) * 100 + 1, (i+1) * 100 + 2, (i+1) * 100 + 3]) for i in range(2 * 2)]
 
         # Create plane surface
         concrete_surface = gmsh.model.geo.addPlaneSurface([outer_loop] + rebar_loops)

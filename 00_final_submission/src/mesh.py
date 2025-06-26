@@ -40,8 +40,8 @@ class Mesh:
         Iz = 0
 
         for elem in self.elements:
-            Iy += elem.A * (elem.Cy - self.Cy)**2 + elem.Iy
-            Iz += elem.A * (elem.Cz - self.Cz)**2 + elem.Iz
+            Iy += elem.A * (elem.Cz - self.Cz)**2 + elem.Iy
+            Iz += elem.A * (elem.Cy - self.Cy)**2 + elem.Iz
 
         return Iy, Iz
 
@@ -56,25 +56,23 @@ class Mesh:
                            ("Cross Section Area", str.format('{0:.2f}', self.A))]
 
         print(tabulate(Mesh_properties, 
-                       tablefmt = "fancy_grid", 
-                       floatfmt =        ".2f"))
+                       tablefmt = "fancy_grid",disable_numparse=True))
 
         CS_properties = [(" ", "y", "z")]
     
-        CS_properties.append(("Centroid [mm]"         , self.Cy, self.Cz))
-        CS_properties.append(("Moment of inertia [mm^4]", self.Iy, self.Iz))
+        CS_properties.append(("Centroid [mm]"           , format_value(self.Cy), format_value(self.Cz)))
+        CS_properties.append(("Moment of inertia [mm^4]", format_value(self.Iy), format_value(self.Iz)))
     
         print(tabulate(CS_properties, 
                        headers  =   "firstrow", 
-                       tablefmt = "fancy_grid", 
-                       floatfmt =        ".2f"))
+                       tablefmt = "fancy_grid",disable_numparse=True))
 
 
     def plot(self):
         plt.rcParams['font.family'] = 'serif'
         plt.rcParams['font.serif'] = ['Times New Roman']
         
-        fig, ax = plt.subplots(figsize=(6, 6))
+        fig, ax = plt.subplots(figsize=(4, 4))
 
         for i, element in enumerate(self.elements):
             y = element.coords[:, 0]
@@ -103,3 +101,13 @@ class Mesh:
         ax.set_aspect('equal')
         ax.legend()
         plt.show()
+
+def format_value(val):
+    if isinstance(val, float):
+        if abs(val) < 1e-10:
+            return "0.00"
+        elif abs(val) > 10000:
+            return f"{val:.2e}"
+        else:
+            return f"{val:.2f}"
+    return val

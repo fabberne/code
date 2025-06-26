@@ -214,11 +214,11 @@ def plot_linear_variation_curv(analysis, curvs):
     plt.show()
 
 def plot_influence_of_N_on_M(analysis, N, My_lim, Mz_lim, symetric=True):
-    My = np.linspace(My_lim[0], My_lim[1], 1001)
+    My = np.linspace(My_lim[0], My_lim[1], 501)
     colors = ['C0', 'C1', 'C2', 'C3', 'C4']
 
     # Plotting the results
-    fig, (my, mz) = plt.subplots(1,2, figsize=(10, 4))
+    fig, (my, mz) = plt.subplots(1,2, figsize=(8, 3))
     for j, target_N in enumerate(N):
         xsi = []
         M_res = []
@@ -228,9 +228,12 @@ def plot_influence_of_N_on_M(analysis, N, My_lim, Mz_lim, symetric=True):
             if result[2] == 1:
                 xsi.append(result[0][1])
                 M_res.append(M)
+        xsi.append(0.000041)
+        M_res.append(M_res[-1]+1)
+
         my.plot([x * 1000 for x in xsi], M_res,linestyle='-',  color=colors[j], lw=1)
 
-    Mz = np.linspace(Mz_lim[0], Mz_lim[1], 1001)
+    Mz = np.linspace(Mz_lim[0], Mz_lim[1], 501)
 
     for j, target_N in enumerate(N):
         xsi = []
@@ -241,13 +244,11 @@ def plot_influence_of_N_on_M(analysis, N, My_lim, Mz_lim, symetric=True):
             if result[2] == 1:
                 xsi.append(result[0][2])
                 M_res.append(M)
-        mz.plot([x * 1000 for x in xsi], M_res,linestyle='-', label=f'$N_x$ = {target_N} kN', color=colors[j], lw=1)
+        mz.plot([x * 1000 for x in xsi], M_res,linestyle='-', label=f'$N_x$ = -{target_N} kN', color=colors[j], lw=1)
 
     # Plotting the results
-    plt.suptitle('Influence of $N_x$ on $M_y$ and $M_z$')
-    mz.legend()
-    my.grid()
-    mz.grid()
+    my.grid(alpha=0.5)
+    mz.grid(alpha=0.5)
     if symetric:
         my.set_xlim(-0.04, 0.04)
         mz.set_xlim(-0.04, 0.04)
@@ -295,7 +296,7 @@ def plot_influence_of_Mz_on_My(analysis, My_lim, Mz, symetric=True):
 
 
 def plot_initial_structure(structure):
-    fig = plt.figure(figsize=(10, 10))
+    fig = plt.figure(figsize=(6, 6))
     ax = fig.add_subplot(111, projection='3d')
 
     for beam in structure.beam_elements:
@@ -315,7 +316,7 @@ def plot_initial_structure(structure):
         for eta in gauss:
             p = (eta + 1) / 2
             point = start_node + p * (end_node - start_node)
-            ax.scatter(*point, color='k', marker='s',s=20)
+            ax.scatter(*point, color='k', marker='s',s=15)
 
     ax.set_box_aspect((np.ptp([0,7000]), np.ptp([-2000,2000]), np.ptp([0,3000])))
 
@@ -370,9 +371,9 @@ def plot_displaced_structure(structure, scale=20.0):
 def plot_moments(steps, section_forces, section_strains, non_linear_solver, length):
      	# Example input: replace with your actual values
 	x = np.array((non_linear_solver.structure.beam_elements[0].gauss_points + 1)/2 * length)  # positions along the cantilever (in meters)
-	kappa_50 = np.array(section_strains[steps[0],0,:,0])  # curvature at each x (in 1/m)
-	kappa_100 = np.array(section_strains[steps[1],0,:,0])  # curvature at each x (in 1/m)
-	kappa_399 = np.array(section_strains[steps[2],0,:,0])  # curvature at each x (in 1/m)
+	kappa_50 = np.array(section_strains[steps[0],0,:,1])  # curvature at each x (in 1/m)
+	kappa_100 = np.array(section_strains[steps[1],0,:,1])  # curvature at each x (in 1/m)
+	kappa_399 = np.array(section_strains[steps[2],0,:,1])  # curvature at each x (in 1/m)
 
 	# First integration: slope (rotation)
 	theta_50 = np.zeros_like(x)
@@ -395,20 +396,19 @@ def plot_moments(steps, section_forces, section_strains, non_linear_solver, leng
 		v_399[i] = v_399[i - 1] + 0.5 * (theta_399[i] + theta_399[i - 1]) * dx
 
 
-	fig, (curv, rot, defl, moment) = plt.subplots(1,4, figsize=(12, 5))
+	fig, (curv, rot, defl, moment) = plt.subplots(1,4, figsize=(10, 4))
 
 
 	# Optional: plot the results
-	curv.plot(kappa_50, x, zorder=4, color="C0", label="388 kN")
-	curv.plot(kappa_100, x, zorder=3, color="C1", label="449 kN")
-	curv.plot(kappa_399, x, zorder=2, color="C2", label="515 kN")
+	curv.plot(kappa_50, x, zorder=4, color="C0")
+	curv.plot(kappa_100, x, zorder=3, color="C1")
+	curv.plot(kappa_399, x, zorder=2, color="C2")
 	curv.plot([0,0,0,0,0,0,0,0,0,0], x, zorder=5, color="k", marker="s", markersize=2)
 	curv.fill_betweenx(x, kappa_50, zorder=4, color="C0", alpha=0.2)
 	curv.fill_betweenx(x, kappa_100, zorder=3, color="C1", alpha=0.2)
 	curv.fill_betweenx(x, kappa_399, zorder=2, color="C2", alpha=0.2)
 	curv.set_xlabel("Curvature $\\kappa$ [$1/m$]")
 	curv.set_ylabel("length $x$ [$m$]")
-	curv.legend(loc="upper right")
 	curv.set_xlim(-min(kappa_399)*1.2, min(kappa_399)*1.2)
 	curv.grid()
 
@@ -434,18 +434,19 @@ def plot_moments(steps, section_forces, section_strains, non_linear_solver, leng
 	defl.set_xlim(-min(v_399)*1.2, min(v_399)*1.2)
 	defl.grid()
 
-	My_50 = section_forces[steps[0],0,:,0] / 1000 / 1000
-	My_100 = section_forces[steps[1],0,:,0] / 1000 / 1000
-	My_399 = section_forces[steps[2],0,:,0] / 1000 / 1000
-	moment.plot(My_50, x, zorder=4, color="C0")
-	moment.plot(My_100, x, zorder=3, color="C1")
-	moment.plot(My_399, x, zorder=2, color="C2")
+	My_50 = section_forces[steps[0],0,:,1] / 1000 / 1000
+	My_100 = section_forces[steps[1],0,:,1] / 1000 / 1000
+	My_399 = section_forces[steps[2],0,:,1] / 1000 / 1000
+	moment.plot(My_50, x, zorder=4, color="C0", label="400 kN")
+	moment.plot(My_100, x, zorder=3, color="C1", label="525 kN")
+	moment.plot(My_399, x, zorder=2, color="C2", label="650 kN")
 	moment.fill_betweenx(x, My_50, zorder=4, alpha=0.2, color="C0")
 	moment.fill_betweenx(x, My_100, zorder=3, alpha=0.2, color="C1")
 	moment.fill_betweenx(x, My_399, zorder=2, alpha=0.2, color="C2")
 	moment.plot([0,0,0,0,0,0,0,0,0,0], x, zorder=5, color="k", marker="s", markersize=2)
 	moment.set_xlabel("Bending Moment $M_y$ [$kNm$]")
 	moment.set_xlim(-min(My_399)*1.2, min(My_399)*1.2)
+	moment.legend(loc="upper right")
 	moment.grid(zorder=0)
 
 	plt.tight_layout()

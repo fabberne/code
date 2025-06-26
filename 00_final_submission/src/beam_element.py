@@ -3,14 +3,19 @@ from scipy.special import legendre
 
 class Beam_Element:
     def __init__(self, geometry, number_of_cross_sections, nodes, beam_DOFs):
+
+        # assign the number of cross sections and initial positions of the
         self.number_of_cross_sections = number_of_cross_sections
         self.nodes_initial   = nodes
         self.nodes_displaced = nodes
         
+        # get the Gauss points and weights for the beam element
         self.gauss_points, self. gauss_weights = self.get_gauss(number_of_cross_sections)
 
+        # calculate the length of the beam element
         self.length = np.linalg.norm(self.nodes_initial[1] - self.nodes_initial[0])
 
+        # initialize the cross sections
         self.cross_sections = []
         for i in range(number_of_cross_sections):
             self.cross_sections.append(Cross_Section(geometry, self.gauss_points[i], self.gauss_weights[i], self.length))
@@ -27,6 +32,7 @@ class Beam_Element:
         self.resisting_forces_converged = np.zeros((5, 1))
         self.displacements_residual     = np.zeros((5, 1))
 
+        # set the beam DOFs
         self.beam_DOFs = np.array(beam_DOFs)
 
 
@@ -34,51 +40,61 @@ class Beam_Element:
 
 
     def get_gauss(self, number_of_cross_sections):
-        if not isinstance(number_of_cross_sections, int):
-            raise ValueError(f"Value must be of type int. given type: {type(number_of_cross_sections)}")
         if number_of_cross_sections < 2 or number_of_cross_sections > 37:
-            raise ValueError(f"num can only be between 2 and 37")
+            raise ValueError(f"number of cross sections can only be between 2 and 37")
 
-        x = list(np.sort(legendre(number_of_cross_sections - 1).deriv().roots))
-        x.insert(0, -1)
-        x.append(1)
-        x = np.array(x)
-        w = 2 / (number_of_cross_sections * (number_of_cross_sections - 1) * (legendre(number_of_cross_sections - 1)(x)) ** 2)
-        return x, w
+        # Calculate the Gauss-Lobatto points as the zero points of the derivative of the Legendre polynomial
+        points = list(np.sort(legendre(number_of_cross_sections - 1).deriv().roots))
+
+        # Add the endpoints of the interval [-1, 1]
+        points.insert(0, -1)
+        points.append(1)
+        points = np.array(points)
+
+        # Calculate the weights using the derivative of the Legendre polynomial and following formula
+        weights = 2 / (number_of_cross_sections * (number_of_cross_sections - 1) * (legendre(number_of_cross_sections - 1)(points)) ** 2)
+    
+        return points, weights
 
 
     def get_local_stiffness_matrix(self):
+        # Initialize the local flexibility matrix
         local_flexibility_matrix = np.zeros((5, 5))
+
+        # Calculate the jacobian
         J = self.length / 2
 
+        # Calculate the local flexibility matrix by summing the contributions from each cross section
         for cross_section in self.cross_sections:
             local_flexibility_matrix += J * cross_section.gauss_weight * cross_section.get_global_flexibility_matrix()
         
+        # Invert the local flexibility matrix to get the local stiffness matrix
         self.K_local = np.linalg.inv(local_flexibility_matrix)
 
         return self.K_local
 
 
     def get_global_stiffness_matrix(self):
-        # Initialize the global stiffness matrix
-
-        # Compute the global stiffness matrix using the local stiffness matrix and transformation matrix
+        # get the transformation matrix and rotation matrix
         L = self.get_transformation_matrix()
         Rot = self.get_rotation_matrix()
 
+        # get the local stiffness matrix and expand it to the global coordinates
         self.K_local  = self.get_local_stiffness_matrix()
         self.K_global = L @ self.K_local @ L.T
 
-        # set torsion degrees of freedom to constrained
+        # restrain the torsional DOFs
         self.K_global[3, 3] = 1
         self.K_global[9, 9] = 1
 
+        # rotate the stiffness matrix to the global coordinate system
         self.K_global = Rot.T @ self.K_global @ Rot
 
         return self.K_global
 
     
     def get_global_resisting_forces(self):
+        # takes the local resisting forces and transforms them to the global coordinate system
         L   = self.get_transformation_matrix()
         Rot = self.get_rotation_matrix()
 
@@ -92,76 +108,81 @@ class Beam_Element:
         # Initialize the transformation matrix
         L = np.zeros((12, 5))
 
-        # --- Forces at node 1 (rows 0:3) ---
+        # --- node 1 ---
         # u1: axial force N
         L[0, 4] = -1.0
 
-        # v1: bending about z-axis → vertical shear from M1z, M2z
-        L[1, 2] = 1.0 / self.length
-        L[1, 3] = 1.0 / self.length
+        # v1: bending about z-axis
+        L[1, 0] = 1.0 / self.length
+        L[1, 1] = 1.0 / self.length
 
-        # w1: bending about y-axis → lateral shear from M1y, M2y
-        L[2, 0] = -1.0 / self.length
-        L[2, 1] = -1.0 / self.length
+        # w1: bending about y-axis
+        L[2, 2] = -1.0 / self.length
+        L[2, 3] = -1.0 / self.length
 
-        # No force contribution to θx1 (pure torsion)
+        # θx1: torsion is not handled here
 
-        # --- Moments at node 1 (rows 3:6) ---
-        # θx1: torsion is not handled here (would come from GJ if implemented separately)
-        # θy1: bending about y-axis (vertical bending) comes from M1y
-        L[4, 0] = 1.0
+        # θy1: bending about y-axis
+        L[4, 2] = 1.0
 
-        # θz1: bending about z-axis (lateral bending) comes from M1z
-        L[5, 2] = 1.0
+        # θz1: bending about z-axis
+        L[5, 0] = 1.0
 
-        # --- Forces at node 2 (rows 6:9) ---
+        # --- node 2 ---
         # u2: axial force N
         L[6, 4] = 1.0
 
         # v2: bending about z-axis
-        L[7, 2] = -1.0 / self.length
-        L[7, 3] = -1.0 / self.length
+        L[7, 0] = -1.0 / self.length
+        L[7, 1] = -1.0 / self.length
 
         # w2: bending about y-axis
-        L[8, 0] = 1.0 / self.length
-        L[8, 1] = 1.0 / self.length
+        L[8, 2] = 1.0 / self.length
+        L[8, 3] = 1.0 / self.length
 
-        # --- Moments at node 2 (rows 9:12) ---
-        # θy2: bending about y-axis (vertical bending) from M2y
-        L[10, 1] = 1.0
+        # θx2: torsion is not handled here
 
-        # θz2: bending about z-axis (lateral bending) from M2z
-        L[11, 3] = 1.0
+        # θy2: bending about y-axis
+        L[10, 3] = 1.0
+
+        # θz2: bending about z-axis
+        L[11, 1] = 1.0
 
         return L
 
     def get_rotation_matrix(self):
 
-        # Local x-axis (beam axis) = node2 - node1
+        # Local x-axis (beam axis)
         v = self.nodes_initial[1] - self.nodes_initial[0]
         L = self.length
-        e1 = v / L  # local x-axis (unit vector)
 
-        # Choose a global reference vector for building local z-axis
+        # Unit vector along the beam axis
+        e1 = v / L 
+
+        # Global reference vector for building local z-axis
         g = np.array([0.0, 0.0, 1.0])
-        if np.allclose(np.abs(np.dot(e1, g)), 1.0):  # parallel to global Z?
-            g = np.array([1.0, 0.0, 0.0])            # switch to global Y
 
+        # Check if e1 is parallel to global z-axis
+        if np.allclose(np.abs(np.dot(e1, g)), 1.0):
+            # If e1 is parallel to global z-axis, switch to global Y-axis
+            g = np.array([1.0, 0.0, 0.0])
+
+        # Build local y-axis (perpendicular to e1 and g)
         e2 = np.cross(g, e1)
-        e2 /= np.linalg.norm(e2)  # normalize
+        e2 /= np.linalg.norm(e2)
 
-        e3 = np.cross(e1, e2)     # third orthogonal vector
+        # Build local z-axis (perpendicular to e1 and e2)
+        e3 = np.cross(e1, e2)
 
-        # --- Build small 3x3 rotation matrix R ---
-        R = np.vstack((e1, e2, e3))  # each row is a local axis
+        # Build small 3x3 rotation matrix R
+        R = np.vstack((e1, e2, e3))
 
-        # --- Build big 12x12 block-diagonal matrix T ---
-        T = np.zeros((12, 12))
+        # Build big 12x12 block-diagonal matrix Rot
+        Rot = np.zeros((12, 12))
+        for i in range(4):
+            Rot[i*3:(i+1)*3, i*3:(i+1)*3] = R
 
-        for i in range(4):  # 4 blocks (u,v,w θx,θy,θz) at node 1 and node 2
-            T[i*3:(i+1)*3, i*3:(i+1)*3] = R
-
-        return T
+        return Rot
 
     
     #--------------------------------------------------------------------------------------------------------------------------------#

@@ -200,6 +200,7 @@ class Laminate:
         ax.set_zticklabels([])
         ax.set_aspect('equal', "box")
         ax.legend(handles=legend_elements)
+        plt.savefig("laminate_plot.png", dpi=300, bbox_inches='tight')
         plt.show()
 
 

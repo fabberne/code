@@ -10,13 +10,13 @@ from collections import defaultdict
 
 @jit(nopython=True, cache=True)
 def calculate_strains_fast(eps_x, cy_values, cz_values, xsi_y, xsi_z):
-    return eps_x + cy_values * xsi_y + cz_values * xsi_z
+    return eps_x + cz_values * xsi_y + cy_values * xsi_z
 
 @jit(nopython=True, cache=True)
 def calculate_section_forces_fast(area_values, stresses, cy_values, cz_values):
     N  = np.sum(area_values * stresses) / 1000
-    My = np.sum(area_values * stresses * cy_values) / 1e6
-    Mz = np.sum(area_values * stresses * cz_values) / 1e6
+    My = np.sum(area_values * stresses * cz_values) / 1e6
+    Mz = np.sum(area_values * stresses * cy_values) / 1e6
     return N, My, Mz
 
 class stress_strain_analysis:
@@ -31,8 +31,8 @@ class stress_strain_analysis:
         self.xsi_z = 0
 
         self.area_values = np.array([elem.A for elem in self.mesh.elements])
-        self.cy_values = np.array([elem.Cy - self.mesh.Cy for elem in self.mesh.elements])
-        self.cz_values = np.array([elem.Cz - self.mesh.Cz for elem in self.mesh.elements])
+        self.cy_values   = np.array([elem.Cy - self.mesh.Cy for elem in self.mesh.elements])
+        self.cz_values   = np.array([elem.Cz - self.mesh.Cz for elem in self.mesh.elements])
 
         # Create groups for elements with the same material
         self.material_groups = defaultdict(list)
@@ -56,7 +56,6 @@ class stress_strain_analysis:
         self.strains = calculate_strains_fast(self.eps_x, self.cy_values, self.cz_values, self.xsi_y, self.xsi_z)
 
     def calculate_stresses(self):
-    
         # Compute stresses for each material group
         for i, (material_name, indices) in enumerate(self.material_groups.items()):
             indices = np.array(indices)  # Faster indexing
@@ -68,20 +67,6 @@ class stress_strain_analysis:
     def get_section_forces(self):
         N, My, Mz = calculate_section_forces_fast(self.area_values, self.stresses, self.cy_values, self.cz_values)
         return N, My, Mz
-    
-    def find_strain_and_curvature(self, V):
-
-        self.set_strain_and_curvature(V[0], V[1], V[2])
-        self.calculate_strains()
-        self.calculate_stresses()
-
-        Nx, My, Mz = self.get_section_forces()
-
-        scale_N , scale_My , scale_Mz  = max(abs(self.Nx), 1), max(abs(self.My), 1), max(abs(self.Mz), 1)
-
-        Residual = ((Nx - self.Nx) / scale_N) ** 2 + ((My - self.My) / scale_My) ** 2 + ((Mz - self.Mz) / scale_Mz) ** 2
-
-        return Residual
     
     def system_of_equations(self, V, N_target, My_target, Mz_target):
         self.set_strain_and_curvature(V[0], V[1], V[2])
